@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import requests
 
 # تنظیمات اصلی
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyFakeKeyForTestingLocation123"
 INPUT_FILE = "config.txt"      # فایل ورودی کانفیگ‌ها
 OUTPUT_FILE = "gemini-configs.txt"    # فایل خروجی کانفیگ‌های سالم
 TARGET_URL = "https://gemini.google.com/app"
@@ -118,14 +118,18 @@ def test_single_config(item: tuple) -> str | None:
             print(f"🚫 [لوکیشن نامعتبر برای Gemini] کانفیگ {index}")
             return None
         # ۲. اگر کد 403 داد -> یعنی آی‌پی مسدود است
-        if resp.status_code == 403:
-            print(f"❌ [403 Forbidden] کانفیگ {index}")
-            return None
+        # if resp.status_code == 403:
+        #     print(f"❌ [403 Forbidden] کانفیگ {index}")
+        #     return None
         # ۳. اگر کد 200 یا 400 (نیاز به کلید) داد و خطای لوکیشن نداد -> کاملاً سالم است!
-        if resp.status_code in [200, 400]:
-            print(f"✅ [سالم و آماده استفاده در Gemini] کانفیگ شماره {index}")
+        if resp.status_code == 400 and "api key not valid" in content:
+            print(f"✅ [سالم و تأیید شده برای Gemini] کانفیگ شماره {index}")
             return link
-        print(f"⚠️ [پاسخ نامشخص {resp.status_code}] کانفیگ {index}")
+            # ۳. اگر کد 200 داد
+        if resp.status_code == 200:
+            print(f"✅ [سالم] کانفیگ شماره {index}")
+            return link
+        print(f"❌ [عدم تأیید - کد {resp.status_code}] کانفیگ {index}")
         return None
     except Exception:
         print(f"⏳ [قطع / تایم‌اوت] کانفیگ شماره {index}")
