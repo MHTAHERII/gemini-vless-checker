@@ -1,0 +1,47 @@
+name: Gemini VLESS Auto Tester
+
+on:
+  schedule:
+    # هر ۶ ساعت یک‌بار خودکار اجرا شود
+    - cron: '0 */6 * * *'
+  # امکان اجرای دستی با یک دکمه
+  workflow_dispatch:
+  # با هر بار ارسال تغییرات
+  push:
+    branches: [ main, master ]
+
+jobs:
+  test-and-update:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install "requests[socks]"
+
+      - name: Install Xray Core
+        run: |
+          bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+      - name: Run Gemini Tester
+        run: |
+          python tester.py
+
+      - name: Commit and push valid configs
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add gemini-configs.txt
+          git commit -m "Auto-update Gemini configs [skip ci]" || exit 0
+          git push
