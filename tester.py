@@ -9,9 +9,20 @@ import requests
 # تنظیمات اصلی
 INPUT_FILE = "config.txt"      # فایل ورودی کانفیگ‌ها
 OUTPUT_FILE = "gemini-configs.txt"    # فایل خروجی کانفیگ‌های سالم
-TARGET_URL = "https://gemini.google.com"
+TARGET_URL = "https://gemini.google.com/app"
 MAX_WORKERS = 20                      # تعداد تست همزمان
 TIMEOUT = 5                           # مهلت پاسخ (ثانیه)
+BLOCKED_KEYWORDS = [
+    "isn't supported in this country",
+    "not supported in your country",
+    "isn't available in your country",
+    "not available in your country",
+    "geo_unavailable",
+    "location_unsupported",
+    "country_unavailable",
+    "location not supported",
+]
+
 
 # مسیر Xray (در ویندوز xray.exe و در لینوکس xray)
 XRAY_BIN = "xray" if os.name != "nt" else r"C:\xray\xray.exe"
@@ -68,21 +79,16 @@ def vless_to_xray_config(vless_link: str, socks_port: int) -> dict:
         }]
     }
 
-
 def test_single_config(item: tuple) -> str | None:
-    """تست یک کانفیگ در یک ترد مجزا با پورت اختصاصی"""
     index, link = item
     socks_port = 20000 + (index % 1000)
     config_file = f"temp_cfg_{socks_port}.json"
-
     try:
         cfg = vless_to_xray_config(link, socks_port)
     except Exception:
         return None
-
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(cfg, f)
-
     proc = None
     try:
         proc = subprocess.Popen(
@@ -90,16 +96,15 @@ def test_single_config(item: tuple) -> str | None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        time.sleep(0.4)  # زمان برای آماده شدن پورت
-
+        time.sleep(0.4)
         proxies = {
             "http": f"socks5h://127.0.0.1:{socks_port}",
             "https": f"socks5h://127.0.0.1:{socks_port}",
         }
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
         }
-
         resp = requests.get(
             TARGET_URL,
             proxies=proxies,
@@ -107,18 +112,27 @@ def test_single_config(item: tuple) -> str | None:
             timeout=TIMEOUT,
             allow_redirects=True,
         )
-
-        if resp.status_code == 200:
-            print(f"✅ [سالم] کانفیگ شماره {index}")
-            return link
-        else:
-            print(f"❌ [ناموفق] کانفیگ شماره {index} (کد: {resp.status_code})")
+        # ۱. بررسی کد وضعیت HTTP
+        if resp.status_code != 200:
+            print(f"❌ [کد خطا {resp.status_code}] کانفیگ {index}")
             return None
-
+        # ۲. بررسی ریدایرکت به صفحات نامعتبر
+        final_url = resp.url.lower()
+        if "unavailable" in final_url or "geo" in final_url:
+            print(f"🚫 [لوکیشن نامعتبر بر اساس URL] کانفیگ {index}")
+            return None
+        # ۳. بررسی محتوای صفحه برای پیدا کردن پیام‌های عدم پشتیبانی منطقه
+        page_content = resp.text.lower()
+        for keyword in BLOCKED_KEYWORDS:
+            if keyword in page_content:
+                print(f"🚫 [محدودیت منطقه‌ای Gemini] کانفیگ {index}")
+                return None
+        # اگر از هر سه فیلتر عبور کرد -> کانفیگ ۱۰۰٪ آماده استفاده در Gemini است!
+        print(f"✅ [سالم و بدون محدودیت] کانفیگ شماره {index}")
+        return link
     except Exception:
-        print(f"⏳ [قطع] کانفیگ شماره {index}")
+        print(f"⏳ [قطع / تایم‌اوت] کانفیگ شماره {index}")
         return None
-
     finally:
         if proc:
             try:
@@ -131,7 +145,6 @@ def test_single_config(item: tuple) -> str | None:
                 os.remove(config_file)
             except Exception:
                 pass
-
 
 def main():
     if not os.path.exists(INPUT_FILE):
