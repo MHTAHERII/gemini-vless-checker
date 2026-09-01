@@ -32,7 +32,9 @@ jobs:
 
       - name: Install Xray Core
         run: |
-          bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+          wget -q -O xray.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+          sudo unzip -d /usr/local/bin/ xray.zip xray
+          sudo chmod +x /usr/local/bin/xray
 
       - name: Run Gemini Tester
         run: |
