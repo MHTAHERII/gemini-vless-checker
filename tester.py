@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import requests
 
 # تنظیمات اصلی
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 INPUT_FILE = "config.txt"      # فایل ورودی کانفیگ‌ها
 OUTPUT_FILE = "gemini-configs.txt"    # فایل خروجی کانفیگ‌های سالم
 TARGET_URL = "https://gemini.google.com/app"
@@ -102,34 +103,30 @@ def test_single_config(item: tuple) -> str | None:
             "https": f"socks5h://127.0.0.1:{socks_port}",
         }
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         }
+        # ارسال درخواست به API جمینای
         resp = requests.get(
-            TARGET_URL,
+            GEMINI_API_URL,
             proxies=proxies,
             headers=headers,
             timeout=TIMEOUT,
-            allow_redirects=True,
         )
-        # ۱. بررسی کد وضعیت HTTP
-        if resp.status_code != 200:
-            print(f"❌ [کد خطا {resp.status_code}] کانفیگ {index}")
+        content = resp.text.lower()
+        # ۱. اگر خطای عدم پشتیبانی لوکیشن داد -> رد
+        if "location is not supported" in content or "user location" in content:
+            print(f"🚫 [لوکیشن نامعتبر برای Gemini] کانفیگ {index}")
             return None
-        # ۲. بررسی ریدایرکت به صفحات نامعتبر
-        final_url = resp.url.lower()
-        if "unavailable" in final_url or "geo" in final_url:
-            print(f"🚫 [لوکیشن نامعتبر بر اساس URL] کانفیگ {index}")
+        # ۲. اگر کد 403 داد -> یعنی آی‌پی مسدود است
+        if resp.status_code == 403:
+            print(f"❌ [403 Forbidden] کانفیگ {index}")
             return None
-        # ۳. بررسی محتوای صفحه برای پیدا کردن پیام‌های عدم پشتیبانی منطقه
-        page_content = resp.text.lower()
-        for keyword in BLOCKED_KEYWORDS:
-            if keyword in page_content:
-                print(f"🚫 [محدودیت منطقه‌ای Gemini] کانفیگ {index}")
-                return None
-        # اگر از هر سه فیلتر عبور کرد -> کانفیگ ۱۰۰٪ آماده استفاده در Gemini است!
-        print(f"✅ [سالم و بدون محدودیت] کانفیگ شماره {index}")
-        return link
+        # ۳. اگر کد 200 یا 400 (نیاز به کلید) داد و خطای لوکیشن نداد -> کاملاً سالم است!
+        if resp.status_code in [200, 400]:
+            print(f"✅ [سالم و آماده استفاده در Gemini] کانفیگ شماره {index}")
+            return link
+        print(f"⚠️ [پاسخ نامشخص {resp.status_code}] کانفیگ {index}")
+        return None
     except Exception:
         print(f"⏳ [قطع / تایم‌اوت] کانفیگ شماره {index}")
         return None
@@ -145,6 +142,7 @@ def test_single_config(item: tuple) -> str | None:
                 os.remove(config_file)
             except Exception:
                 pass
+
 
 def main():
     if not os.path.exists(INPUT_FILE):
