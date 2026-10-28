@@ -6,7 +6,7 @@ import time
 from urllib.parse import parse_qs, unquote, urlsplit
 import requests
 
-# تنظیمات اصلی
+
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models?key=AIzaSyFakeKeyForTestingLocation123"
 INPUT_FILE = "config.txt"      # فایل ورودی کانفیگ‌ها
 OUTPUT_FILE = "gemini-configs.txt"    # فایل خروجی کانفیگ‌های سالم
